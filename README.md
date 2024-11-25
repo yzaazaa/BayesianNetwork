@@ -66,6 +66,9 @@ tp.add_edge("train", "appointment")
 prob = tp.probability({"rain": "none", "maintenance": "no", "train": "on time", "appointment": "attend"})
 print(prob)
 ```
+
+Output:
+
 ```bash
 0.34019999999999995
 ```

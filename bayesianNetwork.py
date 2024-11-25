@@ -352,15 +352,7 @@ class BayesianNetwork:
 			if node in children:
 				parents.add(parent)
 		return parents
-	
-	def get_cpt(self, node):
-		"""
-		Get Conditional Probability Table for a given node.
-		"""
-		if node not in self.nodes:
-			raise ValueError("Node Not valid.")
-		return self.nodes[node]
-	
+
 	def get_distribution(self, node):
 		"""
 			Get distribution for a given node.

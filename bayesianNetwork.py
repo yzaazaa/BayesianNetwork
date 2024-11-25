@@ -457,9 +457,3 @@ class BayesianNetwork:
 							break
 				joint_prob *= prob
 		return joint_prob
-
-
-
-
-if __name__ == "__main__":
-	bn_test()

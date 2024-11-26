@@ -1,5 +1,6 @@
 from frontier import StackFrontier, Node
 import math
+import itertools
 
 def bn_test():
 	print("\n=== Starting Bayesian Network Tests ===\n")
@@ -236,6 +237,18 @@ def bn_test():
 	except ValueError as e:
 		print("✅ Passed: ", e)
 
+	# Test case 8: Predict proba
+	print("\nTest case 8: P(train=delayed)")
+	prob = tp.predict_probability({"train": "delayed", "rain": "none"})
+	print(prob)
+	# expected = 0.0024
+	# if math.isclose(prob, expected):
+	# 	print("✅ Passed:", prob, "is close to", expected)
+	# else:
+	# 	print("❌ Failed:", prob, "is not close to", expected)
+
+
+
 
 	print("\n=== Tests Complete ===")
 
@@ -353,6 +366,12 @@ class BayesianNetwork:
 				parents.add(parent)
 		return parents
 
+	def get_node(self, value):
+		for node, cpt in self.nodes.items():
+			if value in self.get_values(node):
+				return node
+
+
 	def get_distribution(self, node):
 		"""
 			Get distribution for a given node.
@@ -360,6 +379,18 @@ class BayesianNetwork:
 		if node not in self.nodes:
 			raise ValueError("Node not valid.")
 		return self.nodes[node]
+
+	def get_values(self, node):
+		if node not in self.nodes:
+			raise ValueError("Node Not valid.")
+		if isinstance(self.nodes[node], list):
+			k = []
+			for i in self.nodes[node]:
+				if i[-2] not in k:
+					k.append(i[-2])
+			return k
+		else:
+			return list(self.nodes[node].keys())
 
 	def update_cpt(self, node, new_probabilities):
 		"""
@@ -423,13 +454,9 @@ class BayesianNetwork:
 			if isinstance(self.nodes[node], dict) and proba not in self.nodes[node].keys():
 				raise ValueError("Value not in possible values.")
 			elif isinstance(self.nodes[node], list):
-				if proba not in set(i[-2] for i in self.nodes[node]):
+				if proba not in self.get_values(node):
 					raise ValueError("Value not in possible values.")
 			relevant_nodes.add(node)
-		
-		# Add parent nodes
-		for node in list(relevant_nodes): 
-			relevant_nodes.update(self.get_parents(node))
 
 		# Sort from root to child
 		relevant_nodes = self.topological_sort(relevant_nodes)
@@ -449,3 +476,96 @@ class BayesianNetwork:
 							break
 				joint_prob *= prob
 		return joint_prob
+
+	def normalize(self, probabilities):
+		total = sum(probabilities.values())
+		return {k: v / total for k, v in probabilities.items()}
+
+	def inference_enumeration(self, node, value, evidence):
+		"""
+		Infer a probability given an evidence using inference by enumeration
+
+		Args:
+			node: A string containing the name of the node.
+			value: A possible value for the node.
+			evidence: A dictionary mapping node names to their observed values.
+
+		Returns:
+			probability of the value being true given the evidence
+		"""
+		if node not in self.nodes:
+			raise ValueError("Node not in network.")
+		if value not in self.get_values(node):
+			raise ValueError("Value not in possible values.")
+		
+		# Create a copy of evidence to avoid modifying the original
+		evidence = evidence.copy()
+		
+		# Set the query node to the specific value we're investigating
+		evidence[node] = value
+		
+		# Find all hidden variables (nodes not in evidence or query node)
+		hidden_variables = [
+			var for var in self.nodes.keys() 
+			if var not in evidence and var != node
+		]
+		# Generate all possible assignments for hidden variables
+		def generate_assignments():
+			# Create a list of all possible value combinations for assignment
+			hidden_var_values = []
+			for var in hidden_variables:
+				hidden_var_values.append(self.get_values(var))
+			l = list(itertools.product(*hidden_var_values))
+			l = [list(tup) for tup in l]
+			for val in evidence.values():
+				for i in l:
+					i.append(val)
+			l = [
+				{self.get_node(val): val for val in sublist}
+				for sublist in l
+			]
+			return l
+
+		# Sum probabilities for all hidden variable assignments
+		all_assignments = generate_assignments()
+		total_prob = sum(
+			self.probability(assignment) for assignment in all_assignments
+		)
+
+		return total_prob
+
+	def predict_probability(self, evidence):
+		"""
+		Computes the probability of all nodes given evidence.
+
+		Args:
+			evidence: A dictionary mapping node names to their observed values.
+
+		Returns:
+			probability distribution for all variables given some observed evidence.
+		"""
+		# Check for evidence
+		updated_distribution = {}
+		for node, proba in evidence.items():
+			if node not in self.nodes:
+				raise ValueError("Node not in network.")
+			if isinstance(self.nodes[node], dict) and proba not in self.nodes[node].keys():
+				raise ValueError("Value not in possible values.")
+			elif isinstance(self.nodes[node], list):
+				if proba not in set(i[-2] for i in self.nodes[node]):
+					raise ValueError("Value not in possible values.")
+
+		for node in self.nodes.keys():
+			if node in evidence:
+				updated_distribution[node] = {evidence[node]: 1.0}
+				continue
+			
+			node_values = self.get_values(node)
+			node_probs = {}
+			for value in node_values:
+				node_probs[value] = self.inference_enumeration(node, value, evidence)
+
+			updated_distribution[node] = self.normalize(node_probs)
+		return updated_distribution
+
+bn_test()
